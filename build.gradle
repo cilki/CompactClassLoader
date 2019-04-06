@@ -1,0 +1,85 @@
+plugins {
+	id 'eclipse'
+	id 'java-library'
+	id 'maven-publish'
+	id 'signing'
+}
+
+eclipse {
+	project {
+		name = 'CompactClassLoader'
+		comment = 'A small ClassLoader for nested jar hierarchies'
+	}
+}
+
+repositories {
+	mavenCentral()
+}
+
+dependencies {
+	testImplementation 'org.junit.jupiter:junit-jupiter-engine:5.4.1'
+}
+
+test {
+	useJUnitPlatform()
+}
+
+task sourcesJar(type: Jar) {
+	from sourceSets.main.allJava
+	archiveClassifier = 'sources'
+}
+
+task javadocJar(type: Jar) {
+	from javadoc
+	archiveClassifier = 'javadoc'
+}
+
+publishing {
+	publications {
+		mavenJava(MavenPublication) {
+			groupId = 'com.github.cilki'
+			artifactId = 'compact-class-loader'
+			version = COMPACTCLASSLOADER_VERSION
+
+			from components.java
+			artifact sourcesJar
+			artifact javadocJar
+			pom {
+				name = 'CompactClassLoader'
+				description = 'A small ClassLoader for nested jar hierarchies'
+				url = 'https://github.com/cilki/CompactClassLoader'
+				licenses {
+					license {
+						name = 'The Apache License, Version 2.0'
+						url = 'http://www.apache.org/licenses/LICENSE-2.0.txt'
+					}
+				}
+				developers {
+					developer {
+						id = 'cilki'
+						name = 'Tyler Cook'
+						email = 'tcc@sandpolis.com'
+					}
+				}
+				scm {
+					connection = 'scm:git:git://github.com/cilki/CompactClassLoader.git'
+					developerConnection = 'scm:git:ssh://git@github.com/cilki/CompactClassLoader.git'
+					url = 'https://github.com/cilki/CompactClassLoader'
+				}
+			}
+		}
+	}
+	repositories {
+		maven {
+			url = "https://oss.sonatype.org/service/local/staging/deploy/maven2"
+			credentials {
+				username PUBLISH_USER
+				password PUBLISH_PASS
+			}
+		}
+	}
+}
+
+signing {
+	sign publishing.publications.mavenJava
+}

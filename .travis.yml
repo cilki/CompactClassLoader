@@ -1,0 +1,12 @@
+sudo: false
+language: java
+
+script:
+  - ./gradlew test
+
+os:
+  - linux
+  - osx
+
+jdk:
+  - openjdk11
