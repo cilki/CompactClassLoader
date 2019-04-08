@@ -38,7 +38,7 @@ publishing {
 	publications {
 		mavenJava(MavenPublication) {
 			groupId = 'com.github.cilki'
-			artifactId = 'compact-class-loader'
+			artifactId = 'compact-classloader'
 			version = COMPACTCLASSLOADER_VERSION
 
 			from components.java
