@@ -42,7 +42,7 @@ public final class CompactClassLoader extends ClassLoader {
 	 * A list of classloaders responsible for loading {@link URL}s introduced by
 	 * {@link #add(URL)}.
 	 */
-	private final List<ComponentClassLoader> components;
+	private final List<NodeClassLoader> components;
 
 	/**
 	 * Build an empty {@link CompactClassLoader}.
@@ -58,7 +58,7 @@ public final class CompactClassLoader extends ClassLoader {
 	 * Build a {@link CompactClassLoader} for the current jar file. At minimum,
 	 * every top-level jar will be added to the class loader.
 	 * 
-	 * @param recursive Whether to add jars recursively
+	 * @param recursive Whether all encountered jars will also be added
 	 * @throws IOException
 	 */
 	public CompactClassLoader(boolean recursive) throws IOException {
@@ -96,7 +96,7 @@ public final class CompactClassLoader extends ClassLoader {
 		}
 
 		// Try jar components
-		for (ComponentClassLoader component : components)
+		for (NodeClassLoader component : components)
 			try {
 				return component.loadClass(name);
 			} catch (ClassNotFoundException e) {
@@ -109,20 +109,20 @@ public final class CompactClassLoader extends ClassLoader {
 
 	@Override
 	public URL findResource(String name) {
-		return components.stream().flatMap(component -> component.findLocalResources(name)).findAny().orElse(null);
+		return components.stream().flatMap(component -> component.getResourcesStream(name)).findAny().orElse(null);
 	}
 
 	@Override
 	public Enumeration<URL> findResources(String name) {
-		return Collections.enumeration(components.stream().flatMap(component -> component.findLocalResources(name))
+		return Collections.enumeration(components.stream().flatMap(component -> component.getResourcesStream(name))
 				.collect(Collectors.toList()));
 	}
 
 	/**
 	 * Add the given {@link URL} to the {@link ClassLoader} as a new component.
 	 * 
-	 * @param url The {@link URL} to add which may be a filesystem directory, jar
-	 *            file, directory within a jar file, or a jar file within a jar file
+	 * @param url The {@link URL} to add which may be a jar file or a jar file
+	 *            within a jar file
 	 * @throws IOException
 	 */
 	public void add(URL url) throws IOException {
@@ -132,27 +132,16 @@ public final class CompactClassLoader extends ClassLoader {
 	/**
 	 * Add the given {@link URL} to the {@link ClassLoader} as a new component.
 	 * 
-	 * @param url       The {@link URL} to add which may be a filesystem directory,
-	 *                  jar file, directory within a jar file, or a jar file within
-	 *                  a jar file
-	 * @param recursive
+	 * @param url       The {@link URL} to add which may be a jar file or a jar file
+	 *                  within a jar file
+	 * @param recursive Whether all encountered jars will also be added
 	 * @throws IOException
 	 */
 	public void add(URL url, boolean recursive) throws IOException {
 		Objects.requireNonNull(url);
-		// TODO check for duplicate URL
+		if (components.stream().anyMatch(c -> c.findBaseUrl(url)))
+			throw new IllegalArgumentException("The URL is already has a classloader in the hierarchy");
 
-		components.add(new ComponentClassLoader(this, url, recursive));
-	}
-
-	/**
-	 * Unload all components.
-	 * 
-	 * @throws IOException
-	 */
-	public void unload() throws IOException {
-		for (ComponentClassLoader component : components)
-			component.close();
-		components.clear();
+		components.add(new NodeClassLoader(this, URLFactory.toNested(url), recursive));
 	}
 }

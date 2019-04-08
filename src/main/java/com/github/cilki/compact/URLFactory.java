@@ -56,6 +56,7 @@ final class URLFactory {
 						if (i != 1)
 							jar = new ZipInputStream(jar);
 
+						// Find the entry that equals levels[i]
 						ZipEntry entry;
 						while ((entry = jar.getNextEntry()) != null && !entry.getName().equals(levels[i]))
 							;

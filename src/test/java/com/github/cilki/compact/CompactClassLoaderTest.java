@@ -21,7 +21,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-import java.net.URL;
 import java.nio.file.Paths;
 import java.util.Scanner;
 
@@ -34,7 +33,7 @@ class CompactClassLoaderTest {
 	@DisplayName("Load classes from nested jars")
 	void loadClass_1() throws Exception {
 		var loader = new CompactClassLoader(null);
-		loader.add(Paths.get("src/test/resources/nested_1.jar").toUri().toURL());
+		loader.add(Paths.get("src/test/resources/nested_1.jar").toAbsolutePath().toUri().toURL(), true);
 
 		// Nested jar location: /library_1.jar
 		Class<?> c = loader.loadClass("com.example.Class128394");
@@ -51,7 +50,7 @@ class CompactClassLoaderTest {
 	@DisplayName("Load classes from deeply nested jars")
 	void loadClass_2() throws Exception {
 		var loader = new CompactClassLoader(null);
-		loader.add(Paths.get("src/test/resources/nested_2.jar").toUri().toURL(), true);
+		loader.add(Paths.get("src/test/resources/nested_2.jar").toAbsolutePath().toUri().toURL(), true);
 
 		// Nested jar location: /nested_1.jar!/library_1.jar
 		Class<?> c = loader.loadClass("com.example.Class128394");
@@ -68,7 +67,7 @@ class CompactClassLoaderTest {
 	@DisplayName("Load classes from nested jar only")
 	void loadClass_3() throws Exception {
 		var loader = new CompactClassLoader(null);
-		loader.add(new URL("jar:file:" + Paths.get("src/test/resources/nested_2.jar") + "!/1/2/3/library_2.jar"),
+		loader.add(Paths.get("src/test/resources/nested_1.jar!/1/2/3/library_2.jar").toAbsolutePath().toUri().toURL(),
 				false);
 
 		// Nested jar location: /nested_1.jar!/library_1.jar
@@ -84,7 +83,7 @@ class CompactClassLoaderTest {
 	@DisplayName("Load resources from nested jars")
 	void getResourceAsStream_1() throws Exception {
 		var loader = new CompactClassLoader(null);
-		loader.add(Paths.get("src/test/resources/nested_1.jar").toUri().toURL());
+		loader.add(Paths.get("src/test/resources/nested_1.jar").toAbsolutePath().toUri().toURL());
 
 		// Nested jar location: /1/library_3.jar
 		try (Scanner in = new Scanner(loader.getResourceAsStream("resource.txt"))) {
