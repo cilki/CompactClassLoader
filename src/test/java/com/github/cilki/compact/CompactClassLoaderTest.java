@@ -37,13 +37,13 @@ class CompactClassLoaderTest {
 
 		// Nested jar location: /library_1.jar
 		Class<?> c = loader.loadClass("com.example.Class128394");
-		assertEquals(c.getName(), "com.example.Class128394");
-		assertEquals(c.getMethod("call").invoke(null), "19238475347");
+		assertEquals("com.example.Class128394", c.getName());
+		assertEquals("19238475347", c.getMethod("call").invoke(null));
 
 		// Nested jar location: /1/2/3/library_2.jar
 		Class<?> d = loader.loadClass("Class904232");
-		assertEquals(d.getName(), "Class904232");
-		assertEquals(d.getMethod("call").invoke(null), "94859273822");
+		assertEquals("Class904232", d.getName());
+		assertEquals("94859273822", d.getMethod("call").invoke(null));
 	}
 
 	@Test
@@ -54,13 +54,13 @@ class CompactClassLoaderTest {
 
 		// Nested jar location: /nested_1.jar!/library_1.jar
 		Class<?> c = loader.loadClass("com.example.Class128394");
-		assertEquals(c.getName(), "com.example.Class128394");
-		assertEquals(c.getMethod("call").invoke(null), "19238475347");
+		assertEquals("com.example.Class128394", c.getName());
+		assertEquals("19238475347", c.getMethod("call").invoke(null));
 
 		// Nested jar location: /nested_1.jar!/1/2/3/library_2.jar
 		Class<?> d = loader.loadClass("Class904232");
-		assertEquals(d.getName(), "Class904232");
-		assertEquals(d.getMethod("call").invoke(null), "94859273822");
+		assertEquals("Class904232", d.getName());
+		assertEquals("94859273822", d.getMethod("call").invoke(null));
 	}
 
 	@Test
@@ -75,8 +75,32 @@ class CompactClassLoaderTest {
 
 		// Nested jar location: /nested_1.jar!/1/2/3/library_2.jar
 		Class<?> d = loader.loadClass("Class904232");
-		assertEquals(d.getName(), "Class904232");
-		assertEquals(d.getMethod("call").invoke(null), "94859273822");
+		assertEquals("Class904232", d.getName());
+		assertEquals("94859273822", d.getMethod("call").invoke(null));
+	}
+
+	@Test
+	@DisplayName("Load classes from standard library")
+	void loadClass_4() throws Exception {
+		var loader = new CompactClassLoader(null);
+		loader.add(Paths.get("src/test/resources/nested_1.jar!/1/2/3/library_2.jar").toAbsolutePath().toUri().toURL(),
+				false);
+
+		// Load random JRE class
+		Class<?> d = loader.loadClass("java.time.chrono.JapaneseDate");
+		assertEquals("java.time.chrono.JapaneseDate", d.getName());
+	}
+
+	@Test
+	@DisplayName("Load classes that have included dependencies")
+	void loadClass_5() throws Exception {
+		var loader = new CompactClassLoader(null);
+		loader.add(Paths.get("src/test/resources/testapp.jar").toAbsolutePath().toUri().toURL(), true);
+
+		// Load main
+		Class<?> d = loader.loadClass("testapp.Main");
+		assertEquals("testapp.Main", d.getName());
+		d.getMethod("main").invoke(null);
 	}
 
 	@Test
