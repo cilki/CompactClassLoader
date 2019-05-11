@@ -223,7 +223,7 @@ final class NodeClassLoader extends ClassLoader {
 
 			// Load class from the resource
 			try (var in = resource.openStream()) {
-				return defineClass(name, ByteBuffer.wrap(in.readAllBytes()), getClass().getProtectionDomain());
+				return defineClass(name, ByteBuffer.wrap(in.readAllBytes()), null);
 			} catch (IOException e) {
 				throw new ClassNotFoundException(name, e);
 			}

@@ -24,8 +24,6 @@ import java.util.Enumeration;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Objects;
-import java.util.jar.JarEntry;
-import java.util.jar.JarInputStream;
 import java.util.stream.Collectors;
 
 /**
@@ -59,8 +57,7 @@ public final class CompactClassLoader extends ClassLoader {
 	}
 
 	/**
-	 * Build a {@link CompactClassLoader} for the current jar file. At minimum,
-	 * every top-level jar will be added to the class loader.
+	 * Build a {@link CompactClassLoader} for the current jar file.
 	 * 
 	 * @param recursive Whether all encountered jars will also be added
 	 * @throws IOException
@@ -68,14 +65,7 @@ public final class CompactClassLoader extends ClassLoader {
 	public CompactClassLoader(boolean recursive) throws IOException {
 		this(ClassLoader.getSystemClassLoader());
 
-		URL parent = getClass().getProtectionDomain().getCodeSource().getLocation();
-		try (JarInputStream jar = new JarInputStream(parent.openStream())) {
-			JarEntry entry;
-
-			while ((entry = jar.getNextJarEntry()) != null)
-				if (entry.getName().endsWith(".jar"))
-					add(new URL(parent.toString() + "!/" + entry.getName()), recursive);
-		}
+		add(getClass().getProtectionDomain().getCodeSource().getLocation(), recursive);
 	}
 
 	@Override
