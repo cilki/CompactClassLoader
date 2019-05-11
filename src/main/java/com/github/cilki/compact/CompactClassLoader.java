@@ -38,6 +38,10 @@ import java.util.stream.Collectors;
  */
 public final class CompactClassLoader extends ClassLoader {
 
+	static {
+		registerAsParallelCapable();
+	}
+
 	/**
 	 * A list of classloaders responsible for loading {@link URL}s introduced by
 	 * {@link #add(URL)}.
@@ -77,33 +81,22 @@ public final class CompactClassLoader extends ClassLoader {
 	@Override
 	protected Class<?> loadClass(String name, boolean resolve) throws ClassNotFoundException {
 
-		// Shortcut for CompactClassLoader classes
-		if (name.startsWith(CompactClassLoader.class.getPackageName())) {
-			try {
-				return super.loadClass(name, resolve);
-			} catch (ClassNotFoundException e) {
-				// Next classloader
-			}
-		}
-
 		// Shortcut for standard classes
-		if (name.startsWith("java") || name.startsWith("sun")) {
-			try {
-				return getSystemClassLoader().loadClass(name);
-			} catch (ClassNotFoundException e) {
-				// Next classloader
-			}
-		}
+		if (name.startsWith("java"))
+			return getSystemClassLoader().loadClass(name);
 
-		// Try jar components
-		for (NodeClassLoader component : components)
+		// Try components
+		for (NodeClassLoader component : components) {
 			try {
 				return component.loadClass(name);
 			} catch (ClassNotFoundException e) {
-				// Next classloader
+				// Rethrow if not empty
+				if (e.getCause() != null)
+					throw e;
 			}
+		}
 
-		// Last hope
+		// Delegate to parent
 		return super.loadClass(name, resolve);
 	}
 
@@ -142,6 +135,6 @@ public final class CompactClassLoader extends ClassLoader {
 		if (components.stream().anyMatch(c -> c.findBaseUrl(url)))
 			throw new IllegalArgumentException("The URL is already has a classloader in the hierarchy");
 
-		components.add(new NodeClassLoader(this, URLFactory.toNested(url), recursive));
+		components.add(new NodeClassLoader(getParent(), URLFactory.toNested(url), recursive));
 	}
 }

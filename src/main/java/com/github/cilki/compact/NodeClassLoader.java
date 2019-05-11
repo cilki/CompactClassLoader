@@ -18,6 +18,7 @@
 package com.github.cilki.compact;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.URL;
 import java.nio.ByteBuffer;
 import java.util.Collections;
@@ -37,15 +38,14 @@ import java.util.zip.ZipInputStream;
  */
 final class NodeClassLoader extends ClassLoader {
 
+	static {
+		registerAsParallelCapable();
+	}
+
 	/**
 	 * A map of all resource locations in the corresponding jar.
 	 */
 	private final Map<String, URL> resources;
-
-	/**
-	 * A cache of {@link Class} objects loaded by this {@link ClassLoader}.
-	 */
-	private final Map<String, Class<?>> classCache;
 
 	/**
 	 * A list of {@link ClassLoader}s for jars within the corresponding jar.
@@ -69,9 +69,11 @@ final class NodeClassLoader extends ClassLoader {
 	public NodeClassLoader(ClassLoader parent, URL url, boolean recursive) throws IOException {
 		super(parent);
 
+		if (parent instanceof CompactClassLoader)
+			throw new IllegalArgumentException("Invalid parent classloader");
+
 		this.base = Objects.requireNonNull(url);
 		this.resources = new HashMap<>();
-		this.classCache = new HashMap<>();
 		this.children = recursive ? new LinkedList<>() : Collections.emptyList();
 
 		try (ZipInputStream in = new ZipInputStream(url.openStream())) {
@@ -91,14 +93,14 @@ final class NodeClassLoader extends ClassLoader {
 	 * @throws IOException
 	 */
 	private NodeClassLoader(NodeClassLoader parent, URL url, ZipInputStream in, boolean recursive) throws IOException {
-		super(parent);
+		super(Objects.requireNonNull(parent));
 
 		this.base = Objects.requireNonNull(url);
 		this.resources = new HashMap<>();
-		this.classCache = new HashMap<>();
 		this.children = recursive ? new LinkedList<>() : Collections.emptyList();
 
 		init(url, in, recursive);
+		// Do not close the inputstream because the caller will do it
 	}
 
 	/**
@@ -124,7 +126,7 @@ final class NodeClassLoader extends ClassLoader {
 				resources.put(entry.getName(), URLFactory.addEntry(url, entry.getName(), position));
 
 				// Add everything in jar
-				if (entry.getName().endsWith(".jar") && recursive) {
+				if (recursive && entry.getName().endsWith(".jar")) {
 					children.add(new NodeClassLoader(this, resources.get(entry.getName()), new ZipInputStream(jar),
 							recursive));
 				}
@@ -136,65 +138,98 @@ final class NodeClassLoader extends ClassLoader {
 
 	@Override
 	protected Class<?> loadClass(String name, boolean resolve) throws ClassNotFoundException {
+		// Shortcut for standard classes
+		if (name.startsWith("java"))
+			return getSystemClassLoader().loadClass(name);
+
+		return loadClass(name, null);
+	}
+
+	/**
+	 * Load a class by first searching down the classloader hierarchy and then
+	 * delegating to the parent classloader (up the hierarchy).
+	 * 
+	 * @param name   The binary name of the class
+	 * @param caller The {@link NodeClassLoader} that delegated loading to
+	 *               {@code this} (required to avoid infinite loop)
+	 * @return The resulting {@code Class} object
+	 * @throws ClassNotFoundException If the class was not found
+	 */
+	private Class<?> loadClass(String name, NodeClassLoader caller) throws ClassNotFoundException {
+
+		// Delegate down hierarchy
+		try {
+			return loadDown(name, caller);
+		} catch (ClassNotFoundException e) {
+			// Rethrow if not empty
+			if (e.getCause() != null)
+				throw e;
+		}
+
+		// Delegate up hierarchy
+		if (getParent() instanceof NodeClassLoader)
+			return ((NodeClassLoader) getParent()).loadClass(name, this);
+		if (getParent() != null)
+			return getParent().loadClass(name);
+		throw new ClassNotFoundException(name);
+	}
+
+	/**
+	 * Load a class by searching the classloader's managed resources and delegating
+	 * to children if not found.
+	 * 
+	 * @param name The binary name of the class
+	 * @param skip A child classloader that must be skipped
+	 * @return The resulting {@code Class} object
+	 * @throws ClassNotFoundException If the class was not found
+	 */
+	private Class<?> loadDown(String name, NodeClassLoader skip) throws ClassNotFoundException {
 		synchronized (getClassLoadingLock(name)) {
-			Class<?> found = findLoadedClass(name);
-			if (found != null)
-				return found;
+			Class<?> c = findLoadedClass(name);
+			if (c != null)
+				return c;
 
-			// Shortcut for CompactClassLoader classes
-			if (name.startsWith(NodeClassLoader.class.getPackageName())) {
-				try {
-					return super.loadClass(name, resolve);
-				} catch (ClassNotFoundException e) {
-					// Next classloader
-				}
+			try {
+				return findClass(name);
+			} catch (ClassNotFoundException e) {
+				// Rethrow if not empty
+				if (e.getCause() != null)
+					throw e;
 			}
 
-			// Shortcut for standard classes
-			if (name.startsWith("java") || name.startsWith("sun")) {
-				try {
-					return getSystemClassLoader().loadClass(name);
-				} catch (ClassNotFoundException e) {
-					// Next classloader
-				}
-			}
-
-			// Check class cache
-			if (classCache.containsKey(name))
-				return classCache.get(name);
-
-			// Try children
 			for (NodeClassLoader component : children) {
-				try {
-					return component.loadClass(name);
-				} catch (ClassNotFoundException e) {
-					// Next classloader
+				if (component != skip) {
+					try {
+						return component.loadDown(name, null);
+					} catch (ClassNotFoundException e) {
+						// Rethrow if not empty
+						if (e.getCause() != null)
+							throw e;
+					}
 				}
-			}
-
-			String resourceName = name.replace('.', '/') + ".class";
-			if (resources.containsKey(resourceName)) {
-				// Define package
-				if (name.contains("."))
-					definePackage(name.substring(0, name.lastIndexOf('.')), null, null, null, null, null, null, null);
-
-				// Load class from the resource
-				Class<?> loaded;
-				try (var in = resources.get(resourceName).openStream()) {
-					loaded = defineClass(name, ByteBuffer.wrap(in.readAllBytes()), getClass().getProtectionDomain());
-				} catch (IOException e) {
-					throw new ClassNotFoundException(name, e);
-				}
-
-				classCache.put(name, loaded);
-				if (resolve)
-					resolveClass(loaded);
-
-				return loaded;
 			}
 
 			throw new ClassNotFoundException(name);
 		}
+	}
+
+	@Override
+	protected Class<?> findClass(String name) throws ClassNotFoundException {
+		URL resource = resources.get(name.replace('.', '/') + ".class");
+		if (resource != null) {
+			// Define package if not default
+			if (name.contains("."))
+				definePackage(name.substring(0, name.lastIndexOf('.')), null, null, null, null, null, null, null);
+
+			// Load class from the resource
+			try (var in = resource.openStream()) {
+				return defineClass(name, ByteBuffer.wrap(in.readAllBytes()), getClass().getProtectionDomain());
+			} catch (IOException e) {
+				throw new ClassNotFoundException(name, e);
+			}
+		}
+
+		throw new ClassNotFoundException(name);
 	}
 
 	/**
