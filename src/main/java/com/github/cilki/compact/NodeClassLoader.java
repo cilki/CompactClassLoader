@@ -139,7 +139,7 @@ final class NodeClassLoader extends ClassLoader {
 	@Override
 	protected Class<?> loadClass(String name, boolean resolve) throws ClassNotFoundException {
 		// Shortcut for standard classes
-		if (name.startsWith("java"))
+		if (name.startsWith("java."))
 			return getSystemClassLoader().loadClass(name);
 
 		return loadClass(name, null);

@@ -72,7 +72,7 @@ public final class CompactClassLoader extends ClassLoader {
 	protected Class<?> loadClass(String name, boolean resolve) throws ClassNotFoundException {
 
 		// Shortcut for standard classes
-		if (name.startsWith("java"))
+		if (name.startsWith("java."))
 			return getSystemClassLoader().loadClass(name);
 
 		// Try components
