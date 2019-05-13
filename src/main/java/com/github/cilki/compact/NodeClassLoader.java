@@ -25,11 +25,13 @@ import java.io.InputStream;
 import java.net.URL;
 import java.nio.ByteBuffer;
 import java.util.Collections;
+import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
@@ -247,20 +249,6 @@ final class NodeClassLoader extends ClassLoader {
 	}
 
 	/**
-	 * Like {@link #getResources(String)}, but returns a {@link Stream}.
-	 * 
-	 * @param name The resource path to find
-	 * @return A {@link Stream} of all resources visible to the {@link ClassLoader}
-	 *         that satisfies the path
-	 */
-	public Stream<URL> getResourcesStream(String name) {
-		Stream<URL> descendents = children.stream().flatMap(c -> c.getResourcesStream(name));
-		if (resources.containsKey(name))
-			return Stream.concat(descendents, Stream.of(resources.get(name)));
-		return descendents;
-	}
-
-	/**
 	 * Find the given {@link URL} in the classloader hierarchy.
 	 * 
 	 * @param url A base {@link URL}
@@ -269,5 +257,56 @@ final class NodeClassLoader extends ClassLoader {
 	 */
 	public boolean findBaseUrl(URL url) {
 		return base.equals(url) || children.stream().anyMatch(c -> c.findBaseUrl(url));
+	}
+
+	@Override
+	protected URL findResource(String name) {
+		return resources.get(name);
+	}
+
+	@Override
+	protected Enumeration<URL> findResources(String name) throws IOException {
+		throw new UnsupportedOperationException();
+	}
+
+	@Override
+	public Stream<URL> resources(String name) {
+		return resources(name, null);
+	}
+
+	private Stream<URL> resources(String name, NodeClassLoader caller) {
+		// Delegate down hierarchy
+		Stream<URL> r = resourcesDown(name, caller);
+
+		// Delegate up hierarchy
+		if (getParent() instanceof NodeClassLoader)
+			return Stream.concat(r, ((NodeClassLoader) getParent()).resources(name, this));
+		if (getParent() != null)
+			return Stream.concat(r, getParent().resources(name));
+		return r;
+	}
+
+	/**
+	 * Build a stream of resources for this classloader and its descendents.
+	 * 
+	 * @param name The resource name
+	 * @param skip A child classloader that must be skipped
+	 * @return The resulting resource stream
+	 */
+	private Stream<URL> resourcesDown(String name, NodeClassLoader skip) {
+		Stream<URL> descendents = children.stream().filter(c -> c != skip).flatMap(c -> c.resourcesDown(name, null));
+		if (resources.containsKey(name))
+			return Stream.concat(descendents, Stream.of(resources.get(name)));
+		return descendents;
+	}
+
+	@Override
+	public URL getResource(String name) {
+		return resources(name).findFirst().orElse(null);
+	}
+
+	@Override
+	public Enumeration<URL> getResources(String name) throws IOException {
+		return Collections.enumeration(resources(name).collect(Collectors.toList()));
 	}
 }

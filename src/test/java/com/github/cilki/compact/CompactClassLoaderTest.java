@@ -115,6 +115,6 @@ class CompactClassLoaderTest {
 		}
 
 		// Nested jar location: /library_1.jar
-		assertNotNull(loader.findResource("library_1.jar"));
+		assertNotNull(loader.getResource("library_1.jar"));
 	}
 }

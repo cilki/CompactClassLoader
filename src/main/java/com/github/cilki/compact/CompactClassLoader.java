@@ -27,6 +27,7 @@ import java.util.Objects;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * A {@link ClassLoader} that can load nested jar files and bootstrap
@@ -79,39 +80,6 @@ public final class CompactClassLoader extends ClassLoader {
 		add(getClass().getProtectionDomain().getCodeSource().getLocation(), recursive);
 	}
 
-	@Override
-	protected Class<?> loadClass(String name, boolean resolve) throws ClassNotFoundException {
-
-		// Shortcut for standard classes
-		if (name.startsWith("java."))
-			return getSystemClassLoader().loadClass(name);
-
-		// Try components
-		for (NodeClassLoader component : components) {
-			try {
-				return component.loadClass(name);
-			} catch (ClassNotFoundException e) {
-				// Rethrow if not empty
-				if (e.getCause() != null)
-					throw e;
-			}
-		}
-
-		// Delegate to parent
-		return super.loadClass(name, resolve);
-	}
-
-	@Override
-	public URL findResource(String name) {
-		return components.stream().flatMap(component -> component.getResourcesStream(name)).findAny().orElse(null);
-	}
-
-	@Override
-	public Enumeration<URL> findResources(String name) {
-		return Collections.enumeration(components.stream().flatMap(component -> component.getResourcesStream(name))
-				.collect(Collectors.toList()));
-	}
-
 	/**
 	 * Add the given {@link URL} to the {@link ClassLoader} as a new component.
 	 * 
@@ -137,5 +105,53 @@ public final class CompactClassLoader extends ClassLoader {
 			throw new IllegalArgumentException("The URL is already has a classloader in the hierarchy");
 
 		components.add(new NodeClassLoader(getParent(), URLFactory.toNested(url), recursive));
+	}
+
+	@Override
+	protected Class<?> loadClass(String name, boolean resolve) throws ClassNotFoundException {
+
+		// Shortcut for standard classes
+		if (name.startsWith("java."))
+			return getSystemClassLoader().loadClass(name);
+
+		// Try components
+		for (NodeClassLoader component : components) {
+			try {
+				return component.loadClass(name);
+			} catch (ClassNotFoundException e) {
+				// Rethrow if not empty
+				if (e.getCause() != null)
+					throw e;
+			}
+		}
+
+		// Delegate to parent
+		return super.loadClass(name, resolve);
+	}
+
+	@Override
+	protected URL findResource(String name) {
+		return components.stream().flatMap(component -> component.resources(name)).findFirst().orElse(null);
+	}
+
+	@Override
+	protected Enumeration<URL> findResources(String name) {
+		return Collections.enumeration(
+				components.stream().flatMap(component -> component.resources(name)).collect(Collectors.toList()));
+	}
+
+	@Override
+	public Stream<URL> resources(String name) {
+		return components.stream().flatMap(component -> component.resources(name));
+	}
+
+	@Override
+	public URL getResource(String name) {
+		return findResource(name);
+	}
+
+	@Override
+	public Enumeration<URL> getResources(String name) throws IOException {
+		return findResources(name);
 	}
 }
