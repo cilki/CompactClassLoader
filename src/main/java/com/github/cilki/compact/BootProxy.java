@@ -17,6 +17,8 @@
  *****************************************************************************/
 package com.github.cilki.compact;
 
+import static com.github.cilki.compact.CompactClassLoader.log;
+
 import java.io.InputStream;
 import java.util.jar.Manifest;
 
@@ -42,6 +44,7 @@ public final class BootProxy {
 		CompactClassLoader loader = new CompactClassLoader(true);
 		Thread.currentThread().setContextClassLoader(loader);
 
+		log.fine("Booting application: " + main);
 		loader.loadClass(main).getMethod("main", new Class[] { String[].class }).invoke(null, new Object[] { args });
 	}
 }

@@ -24,19 +24,30 @@ import java.util.Enumeration;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Objects;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import java.util.stream.Collectors;
 
 /**
- * A lazy {@link ClassLoader} that can load nested jar files and bootstrap
+ * A {@link ClassLoader} that can load nested jar files and bootstrap
  * applications.<br>
  * <br>
- * Note: This class is NOT thread safe.
+ * Note: Although this class is not entirely thread safe, it can safely load
+ * classes in parallel.
  * 
  * @author cilki
  */
 public final class CompactClassLoader extends ClassLoader {
 
 	static {
+		System.setProperty("java.util.logging.SimpleFormatter.format", "[%1$tF %1$tT] [%4$-4s] %5$s %n");
+	}
+
+	public static final Logger log = Logger.getLogger(CompactClassLoader.class.getName());
+
+	static {
+		log.setLevel(Level.WARNING);
+
 		registerAsParallelCapable();
 	}
 

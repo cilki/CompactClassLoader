@@ -17,6 +17,8 @@
  *****************************************************************************/
 package com.github.cilki.compact;
 
+import static com.github.cilki.compact.CompactClassLoader.log;
+
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -116,6 +118,8 @@ final class NodeClassLoader extends ClassLoader {
 	 * @throws IOException
 	 */
 	private void init(URL url, ZipInputStream jar, boolean recursive) throws IOException {
+		log.fine("Initializing node: " + url);
+
 		int position = 0;
 		ZipEntry entry;
 
