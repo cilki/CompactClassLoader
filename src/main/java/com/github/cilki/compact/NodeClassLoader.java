@@ -17,6 +17,7 @@
  *****************************************************************************/
 package com.github.cilki.compact;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URL;
@@ -121,14 +122,26 @@ final class NodeClassLoader extends ClassLoader {
 		while ((entry = jar.getNextEntry()) != null) {
 
 			if (!entry.isDirectory()) {
+				if (entry.getName().endsWith(".class")) {
 
-				// Add to resources
-				resources.put(entry.getName(), URLFactory.addEntry(url, entry.getName(), position));
+					// Eagerly load class files
+					try (ByteArrayOutputStream bytes = new ByteArrayOutputStream()) {
+						jar.transferTo(bytes);
 
-				// Add everything in jar
-				if (recursive && entry.getName().endsWith(".jar")) {
-					children.add(new NodeClassLoader(this, resources.get(entry.getName()), new ZipInputStream(jar),
-							recursive));
+						// Add to resources
+						resources.put(entry.getName(),
+								URLFactory.buildNested(url, entry.getName(), bytes.toByteArray()));
+					}
+				} else {
+
+					// Add to resources
+					resources.put(entry.getName(), URLFactory.buildNested(url, entry.getName(), position));
+
+					// Add everything in jar
+					if (recursive && entry.getName().endsWith(".jar")) {
+						children.add(new NodeClassLoader(this, resources.get(entry.getName()), new ZipInputStream(jar),
+								recursive));
+					}
 				}
 			}
 
@@ -217,9 +230,6 @@ final class NodeClassLoader extends ClassLoader {
 	protected Class<?> findClass(String name) throws ClassNotFoundException {
 		URL resource = resources.get(name.replace('.', '/') + ".class");
 		if (resource != null) {
-			// Define package if not default
-			if (name.contains("."))
-				definePackage(name.substring(0, name.lastIndexOf('.')), null, null, null, null, null, null, null);
 
 			// Load class from the resource
 			try (var in = resource.openStream()) {

@@ -97,11 +97,23 @@ class URLFactoryTest {
 
 	@Test
 	@DisplayName("Add an entry to a nested URL by position")
-	void addEntry_1() throws IOException {
+	void buildNested_1() throws IOException {
 		URL nested = URLFactory.toNested(
 				Paths.get("src/test/resources/nested_3.jar").toAbsolutePath() + "!/nested_2.jar!/nested_1.jar");
 
-		try (var in = URLFactory.addEntry(nested, "1/library_3.jar", 2).openStream()) {
+		try (var in = URLFactory.buildNested(nested, "1/library_3.jar", 2).openStream()) {
+
+			assertArrayEquals(library_3, in.readAllBytes());
+		}
+	}
+
+	@Test
+	@DisplayName("Add an entry to a nested URL by value")
+	void buildNested_2() throws IOException {
+		URL nested = URLFactory.toNested(
+				Paths.get("src/test/resources/nested_3.jar").toAbsolutePath() + "!/nested_2.jar!/nested_1.jar");
+
+		try (var in = URLFactory.buildNested(nested, "1/library_3.jar", library_3).openStream()) {
 
 			assertArrayEquals(library_3, in.readAllBytes());
 		}

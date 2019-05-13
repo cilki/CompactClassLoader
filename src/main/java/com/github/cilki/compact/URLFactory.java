@@ -17,6 +17,7 @@
  *****************************************************************************/
 package com.github.cilki.compact;
 
+import java.io.ByteArrayInputStream;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -25,6 +26,7 @@ import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLConnection;
 import java.net.URLStreamHandler;
+import java.util.Objects;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
@@ -110,7 +112,7 @@ final class URLFactory {
 	}
 
 	/**
-	 * Add an entry to the given base {@link URL}.
+	 * Build a nested {@link URL} for the given base URL and the given entry.
 	 * 
 	 * @param base     The base {@link URL}
 	 * @param entry    The entry within the base {@link URL}
@@ -119,7 +121,12 @@ final class URLFactory {
 	 *         component
 	 * @throws MalformedURLException
 	 */
-	public static URL addEntry(URL base, String entry, int position) throws MalformedURLException {
+	public static URL buildNested(URL base, String entry, int position) throws MalformedURLException {
+		Objects.requireNonNull(base);
+		Objects.requireNonNull(entry);
+		if (position < 0)
+			throw new IllegalArgumentException("Invalid entry position: " + position);
+
 		return new URL(null, base + "!/" + entry, new URLStreamHandler() {
 
 			@Override
@@ -144,6 +151,40 @@ final class URLFactory {
 						if (in == null)
 							connect();
 						return in;
+					}
+				};
+			}
+		});
+	}
+
+	/**
+	 * Build a nested {@link URL} for the given base URL and the given entry.
+	 * 
+	 * @param base  The base {@link URL}
+	 * @param entry The entry within the base {@link URL}
+	 * @param bytes The entry's data
+	 * @return A {@link URL} capable of opening an {@link InputStream} on the
+	 *         component
+	 * @throws MalformedURLException
+	 */
+	public static URL buildNested(URL base, String entry, byte[] bytes) throws MalformedURLException {
+		Objects.requireNonNull(base);
+		Objects.requireNonNull(entry);
+		Objects.requireNonNull(bytes);
+
+		return new URL(null, base + "!/" + entry, new URLStreamHandler() {
+
+			@Override
+			protected URLConnection openConnection(URL u) throws IOException {
+				return new URLConnection(u) {
+
+					@Override
+					public void connect() throws IOException {
+					}
+
+					@Override
+					public InputStream getInputStream() throws IOException {
+						return new ByteArrayInputStream(bytes);
 					}
 				};
 			}

@@ -44,7 +44,7 @@ class BootProxyTest {
 
 			// Copy CompactClassLoader classes
 			for (String c : List.of("BootProxy", "CompactClassLoader", "NodeClassLoader", "URLFactory$1$1",
-					"URLFactory$1", "URLFactory$2$1", "URLFactory$2", "URLFactory")) {
+					"URLFactory$1", "URLFactory$2$1", "URLFactory$2", "URLFactory$3", "URLFactory$3$1", "URLFactory")) {
 				String resourceName = "com/github/cilki/compact/" + c + ".class";
 				Files.createDirectories(zip.getPath(resourceName).getParent());
 				Files.copy(BootProxyTest.class.getClassLoader().getResourceAsStream(resourceName),
