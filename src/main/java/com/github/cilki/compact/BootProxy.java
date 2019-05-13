@@ -40,6 +40,8 @@ public final class BootProxy {
 			throw new RuntimeException("Missing Boot-Class attribute");
 
 		CompactClassLoader loader = new CompactClassLoader(true);
+		Thread.currentThread().setContextClassLoader(loader);
+
 		loader.loadClass(main).getMethod("main", new Class[] { String[].class }).invoke(null, new Object[] { args });
 	}
 }
