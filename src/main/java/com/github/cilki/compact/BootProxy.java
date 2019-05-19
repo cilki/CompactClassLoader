@@ -19,8 +19,8 @@ package com.github.cilki.compact;
 
 import static com.github.cilki.compact.CompactClassLoader.log;
 
-import java.io.InputStream;
-import java.util.jar.Manifest;
+import java.io.File;
+import java.util.jar.JarFile;
 
 /**
  * This class loads the application's main class with a new recursive
@@ -34,8 +34,11 @@ public final class BootProxy {
 
 	public static void main(String[] args) throws Exception {
 		String main = null;
-		try (InputStream in = BootProxy.class.getResourceAsStream("/META-INF/MANIFEST.MF")) {
-			main = new Manifest(in).getMainAttributes().getValue("Boot-Class");
+		try (JarFile jar = new JarFile(
+				new File(BootProxy.class.getProtectionDomain().getCodeSource().getLocation().toURI()))) {
+			main = jar.getManifest().getMainAttributes().getValue("Boot-Class");
+		} catch (Exception e) {
+			throw new RuntimeException("Failed to read manifest", e);
 		}
 
 		if (main == null)
