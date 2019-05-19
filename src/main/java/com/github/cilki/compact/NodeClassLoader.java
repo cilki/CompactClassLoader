@@ -295,8 +295,9 @@ final class NodeClassLoader extends ClassLoader {
 	 */
 	private Stream<URL> resourcesDown(String name, NodeClassLoader skip) {
 		Stream<URL> descendents = children.stream().filter(c -> c != skip).flatMap(c -> c.resourcesDown(name, null));
-		if (resources.containsKey(name))
-			return Stream.concat(descendents, Stream.of(resources.get(name)));
+		URL resource = findResource(name);
+		if (resource != null)
+			return Stream.concat(descendents, Stream.of(resource));
 		return descendents;
 	}
 
