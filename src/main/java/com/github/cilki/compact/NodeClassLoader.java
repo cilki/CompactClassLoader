@@ -69,7 +69,7 @@ final class NodeClassLoader extends ClassLoader {
 	 * @param url       The {@link URL} to the {@link ClassLoader}'s jar
 	 * @param recursive Whether all encountered jars will become children of this
 	 *                  {@link ClassLoader}
-	 * @throws IOException
+	 * @throws IOException If an I/O exception occurs while reading the given URL
 	 */
 	public NodeClassLoader(ClassLoader parent, URL url, boolean recursive) throws IOException {
 		super(parent);
@@ -95,7 +95,7 @@ final class NodeClassLoader extends ClassLoader {
 	 *                  efficiency during the initial load
 	 * @param recursive Whether all encountered jars will become children of this
 	 *                  {@link ClassLoader}
-	 * @throws IOException
+	 * @throws IOException If an I/O exception occurs while reading the given URL
 	 */
 	private NodeClassLoader(NodeClassLoader parent, URL url, ZipInputStream in, boolean recursive) throws IOException {
 		super(Objects.requireNonNull(parent));
@@ -117,7 +117,7 @@ final class NodeClassLoader extends ClassLoader {
 	 *                  efficiency during the initial load
 	 * @param recursive Whether all encountered jars will become children of this
 	 *                  {@link ClassLoader}
-	 * @throws IOException
+	 * @throws IOException If an I/O exception occurs while reading the given URL
 	 */
 	private void init(URL url, ZipInputStream jar, boolean recursive) throws IOException {
 		log.fine("Initializing node: " + url);

@@ -76,7 +76,7 @@ public final class CompactClassLoader extends ClassLoader {
 	 * Build a {@link CompactClassLoader} for the current jar file.
 	 * 
 	 * @param recursive Whether all encountered jars will also be added
-	 * @throws IOException
+	 * @throws IOException If an I/O exception occurs while reading the current jar
 	 */
 	public CompactClassLoader(boolean recursive) throws IOException {
 		this(ClassLoader.getSystemClassLoader());
@@ -89,7 +89,7 @@ public final class CompactClassLoader extends ClassLoader {
 	 * 
 	 * @param url The {@link URL} to add which may be a jar file or a jar file
 	 *            within a jar file
-	 * @throws IOException
+	 * @throws IOException If an I/O exception occurs while reading the given URL
 	 */
 	public void add(URL url) throws IOException {
 		add(url, true);
@@ -101,7 +101,7 @@ public final class CompactClassLoader extends ClassLoader {
 	 * @param url       The {@link URL} to add which may be a jar file or a jar file
 	 *                  within a jar file
 	 * @param recursive Whether all encountered jars will also be added
-	 * @throws IOException
+	 * @throws IOException If an I/O exception occurs while reading the given URL
 	 */
 	public void add(URL url, boolean recursive) throws IOException {
 		Objects.requireNonNull(url);
