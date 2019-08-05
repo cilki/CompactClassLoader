@@ -41,13 +41,17 @@ import java.util.stream.Stream;
 public final class CompactClassLoader extends ClassLoader {
 
 	static {
-		System.setProperty("java.util.logging.SimpleFormatter.format", "[%1$tF %1$tT] [%4$-4s] %5$s %n");
+		if (System.getProperty("java.util.logging.SimpleFormatter.format") == null)
+			System.setProperty("java.util.logging.SimpleFormatter.format", "[%1$tF %1$tT] [%4$-4s] %5$s %n");
 	}
 
 	public static final Logger log = Logger.getLogger(CompactClassLoader.class.getName());
 
 	static {
-		log.setLevel(Level.WARNING);
+		if (Boolean.getBoolean("compactcl.debug"))
+			log.setLevel(Level.FINE);
+		else
+			log.setLevel(Level.WARNING);
 
 		registerAsParallelCapable();
 	}
