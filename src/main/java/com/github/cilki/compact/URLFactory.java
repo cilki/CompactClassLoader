@@ -18,7 +18,6 @@
 package com.github.cilki.compact;
 
 import java.io.ByteArrayInputStream;
-import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
@@ -44,15 +43,24 @@ final class URLFactory {
 	private static final URLStreamHandler nestedJarHandler = new URLStreamHandler() {
 
 		@Override
-		protected URLConnection openConnection(URL u) throws IOException {
-			return new URLConnection(u) {
+		protected URLConnection openConnection(URL url) throws IOException {
+			return new URLConnection(url) {
 
 				private InputStream in;
 
 				@Override
 				public void connect() throws IOException {
-					String[] levels = u.getPath().split("!/");
-					ZipInputStream jar = new ZipInputStream(new FileInputStream(levels[0]));
+					// Split into the components of the nested URL
+					String[] levels = url.toString().split("!/");
+
+					String file = levels[0];
+					if (!file.startsWith("jar:file:"))
+						throw new MalformedURLException("Unexpected URL protocol: " + url.toString());
+
+					// Remove jar protocol
+					file = file.substring(4);
+
+					ZipInputStream jar = new ZipInputStream(new URL(file).openStream());
 
 					for (int i = 1; i < levels.length; i++) {
 						if (i != 1)
@@ -92,7 +100,7 @@ final class URLFactory {
 	 */
 	public static URL toNested(URL url) throws MalformedURLException {
 		if (url.getPath().contains("!/"))
-			return new URL(null, url.toString(), nestedJarHandler);
+			return new URL(null, ensureProtocol(url.toString()), nestedJarHandler);
 		return url;
 	}
 
@@ -107,7 +115,7 @@ final class URLFactory {
 	 */
 	public static URL toNested(String url) throws MalformedURLException {
 		if (url.contains("!/"))
-			return new URL(null, "jar:" + url, nestedJarHandler);
+			return new URL(null, ensureProtocol(url), nestedJarHandler);
 		return new URL(url);
 	}
 
@@ -127,7 +135,7 @@ final class URLFactory {
 		if (position < 0)
 			throw new IllegalArgumentException("Invalid entry position: " + position);
 
-		return new URL(null, base + "!/" + entry, new URLStreamHandler() {
+		return new URL(null, ensureProtocol(base + "!/" + entry), new URLStreamHandler() {
 
 			@Override
 			protected URLConnection openConnection(URL u) throws IOException {
@@ -172,7 +180,7 @@ final class URLFactory {
 		Objects.requireNonNull(entry);
 		Objects.requireNonNull(bytes);
 
-		return new URL(null, base + "!/" + entry, new URLStreamHandler() {
+		return new URL(null, ensureProtocol(base + "!/" + entry), new URLStreamHandler() {
 
 			@Override
 			protected URLConnection openConnection(URL u) throws IOException {
@@ -189,6 +197,21 @@ final class URLFactory {
 				};
 			}
 		});
+	}
+
+	/**
+	 * Verify that the given URL begins with "jar:file:".
+	 * 
+	 * @param url The input URL
+	 * @return A URL whose protocol is "jar:file:"
+	 */
+	private static String ensureProtocol(String url) {
+		if (url.startsWith("jar:file:"))
+			return url;
+		if (url.startsWith("file:"))
+			return "jar:" + url;
+
+		return "jar:file:" + url;
 	}
 
 	private URLFactory() {
