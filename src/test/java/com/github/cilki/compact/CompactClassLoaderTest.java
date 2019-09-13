@@ -39,11 +39,17 @@ class CompactClassLoaderTest {
 		Class<?> c = loader.loadClass("com.example.Class128394");
 		assertEquals("com.example.Class128394", c.getName());
 		assertEquals("19238475347", c.getMethod("call").invoke(null));
+		assertEquals(Paths.get("src/test/resources/nested_1.jar!/library_1.jar").toAbsolutePath(),
+				Paths.get(c.getProtectionDomain().getCodeSource().getLocation().toString().substring(9)),
+				"Check the class's CodeSource URL");
 
 		// Nested jar location: /1/2/3/library_2.jar
 		Class<?> d = loader.loadClass("Class904232");
 		assertEquals("Class904232", d.getName());
 		assertEquals("94859273822", d.getMethod("call").invoke(null));
+		assertEquals(Paths.get("src/test/resources/nested_1.jar!/1/2/3/library_2.jar").toAbsolutePath(),
+				Paths.get(d.getProtectionDomain().getCodeSource().getLocation().toString().substring(9)),
+				"Check the class's CodeSource URL");
 	}
 
 	@Test
@@ -56,11 +62,17 @@ class CompactClassLoaderTest {
 		Class<?> c = loader.loadClass("com.example.Class128394");
 		assertEquals("com.example.Class128394", c.getName());
 		assertEquals("19238475347", c.getMethod("call").invoke(null));
+		assertEquals(Paths.get("src/test/resources/nested_2.jar!/nested_1.jar!/library_1.jar").toAbsolutePath(),
+				Paths.get(c.getProtectionDomain().getCodeSource().getLocation().toString().substring(9)),
+				"Check the class's CodeSource URL");
 
 		// Nested jar location: /nested_1.jar!/1/2/3/library_2.jar
 		Class<?> d = loader.loadClass("Class904232");
 		assertEquals("Class904232", d.getName());
 		assertEquals("94859273822", d.getMethod("call").invoke(null));
+		assertEquals(Paths.get("src/test/resources/nested_2.jar!/nested_1.jar!/1/2/3/library_2.jar").toAbsolutePath(),
+				Paths.get(d.getProtectionDomain().getCodeSource().getLocation().toString().substring(9)),
+				"Check the class's CodeSource URL");
 	}
 
 	@Test

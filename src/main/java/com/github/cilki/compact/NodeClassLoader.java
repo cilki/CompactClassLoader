@@ -24,6 +24,9 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.URL;
 import java.nio.ByteBuffer;
+import java.security.CodeSource;
+import java.security.ProtectionDomain;
+import java.security.cert.Certificate;
 import java.util.Collections;
 import java.util.Enumeration;
 import java.util.HashMap;
@@ -63,6 +66,11 @@ final class NodeClassLoader extends ClassLoader {
 	private final URL base;
 
 	/**
+	 * A {@link ProtectionDomain} for all classes loaded by this node.
+	 */
+	private final ProtectionDomain protectionDomain;
+
+	/**
 	 * Build a new root {@link NodeClassLoader}.
 	 * 
 	 * @param parent    The parent {@link ClassLoader}
@@ -78,6 +86,7 @@ final class NodeClassLoader extends ClassLoader {
 			throw new IllegalArgumentException("Invalid parent classloader");
 
 		this.base = Objects.requireNonNull(url);
+		this.protectionDomain = new ProtectionDomain(new CodeSource(base, (Certificate[]) null), null, this, null);
 		this.resources = new HashMap<>();
 		this.children = recursive ? new LinkedList<>() : Collections.emptyList();
 
@@ -101,6 +110,7 @@ final class NodeClassLoader extends ClassLoader {
 		super(Objects.requireNonNull(parent));
 
 		this.base = Objects.requireNonNull(url);
+		this.protectionDomain = new ProtectionDomain(new CodeSource(base, (Certificate[]) null), null, this, null);
 		this.resources = new HashMap<>();
 		this.children = recursive ? new LinkedList<>() : Collections.emptyList();
 
@@ -239,7 +249,7 @@ final class NodeClassLoader extends ClassLoader {
 
 			// Load class from the resource
 			try (var in = resource.openStream()) {
-				return defineClass(name, ByteBuffer.wrap(in.readAllBytes()), null);
+				return defineClass(name, ByteBuffer.wrap(in.readAllBytes()), protectionDomain);
 			} catch (IOException e) {
 				throw new ClassNotFoundException(name, e);
 			}
