@@ -3,6 +3,21 @@ plugins {
 	id 'java-library'
 	id 'maven-publish'
 	id 'signing'
+
+	id 'pl.allegro.tech.build.axion-release' version '1.10.2'
+}
+
+scmVersion {
+	tag {
+		prefix = ''
+	}
+	nextVersion {
+		suffix = ''
+	}
+}
+
+allprojects {
+	project.version = scmVersion.version
 }
 
 eclipse {
@@ -39,7 +54,7 @@ publishing {
 		mavenJava(MavenPublication) {
 			groupId = 'com.github.cilki'
 			artifactId = 'compact-classloader'
-			version = COMPACTCLASSLOADER_VERSION
+			version = project.version
 
 			from components.java
 			artifact sourcesJar
