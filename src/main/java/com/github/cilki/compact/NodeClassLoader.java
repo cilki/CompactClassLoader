@@ -130,7 +130,7 @@ final class NodeClassLoader extends ClassLoader {
 	 * @throws IOException If an I/O exception occurs while reading the given URL
 	 */
 	private void init(URL url, ZipInputStream jar, boolean recursive) throws IOException {
-		log.fine("Initializing node: " + url);
+		log.fine(() -> "Initializing node: " + url);
 
 		int position = 0;
 		ZipEntry entry;
@@ -185,6 +185,7 @@ final class NodeClassLoader extends ClassLoader {
 	 * @throws ClassNotFoundException If the class was not found
 	 */
 	private Class<?> loadClass(String name, NodeClassLoader caller) throws ClassNotFoundException {
+		log.finer(() -> "[NODE: " + base + "] Loading class: " + name);
 
 		// Delegate down hierarchy
 		try {
@@ -285,10 +286,12 @@ final class NodeClassLoader extends ClassLoader {
 	}
 
 	private Stream<URL> resources(String name, NodeClassLoader caller) {
-		// Delegate down hierarchy
+		log.finer(() -> "[NODE: " + base + "] Loading resources: " + name);
+
+		// Delegate down hierarchy first
 		Stream<URL> r = resourcesDown(name, caller);
 
-		// Delegate up hierarchy
+		// Delegate up hierarchy next
 		if (getParent() instanceof NodeClassLoader)
 			return Stream.concat(r, ((NodeClassLoader) getParent()).resources(name, this));
 		if (getParent() != null)

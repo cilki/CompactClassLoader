@@ -48,10 +48,7 @@ public final class CompactClassLoader extends ClassLoader {
 	public static final Logger log = Logger.getLogger(CompactClassLoader.class.getName());
 
 	static {
-		if (Boolean.getBoolean("compactcl.debug"))
-			log.setLevel(Level.FINE);
-		else
-			log.setLevel(Level.WARNING);
+		log.setLevel(Level.parse(System.getProperty("ccl.level", "warning").toUpperCase()));
 
 		registerAsParallelCapable();
 	}
