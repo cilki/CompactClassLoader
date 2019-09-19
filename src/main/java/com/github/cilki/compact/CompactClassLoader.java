@@ -70,18 +70,6 @@ public final class CompactClassLoader extends ClassLoader {
 	}
 
 	/**
-	 * Build a {@link CompactClassLoader} for the current jar file.
-	 * 
-	 * @param recursive Whether all encountered jars will also be added
-	 * @throws IOException If an I/O exception occurs while reading the current jar
-	 */
-	public CompactClassLoader(boolean recursive) throws IOException {
-		this(ClassLoader.getSystemClassLoader());
-
-		add(getClass().getProtectionDomain().getCodeSource().getLocation(), recursive);
-	}
-
-	/**
 	 * Add the given {@link URL} to the {@link ClassLoader} as a new component.
 	 * 
 	 * @param url The {@link URL} to add which may be a jar file or a jar file

@@ -20,6 +20,8 @@ package com.github.cilki.compact;
 import static com.github.cilki.compact.CompactClassLoader.log;
 
 import java.io.File;
+import java.io.IOException;
+import java.net.URL;
 import java.util.jar.JarFile;
 
 /**
@@ -33,19 +35,31 @@ import java.util.jar.JarFile;
 public final class BootProxy {
 
 	public static void main(String[] args) throws Exception {
+		CompactClassLoader loader = new CompactClassLoader(BootProxy.class.getClassLoader());
+		Thread.currentThread().setContextClassLoader(loader);
+
 		String main = null;
-		try (JarFile jar = new JarFile(
-				new File(BootProxy.class.getProtectionDomain().getCodeSource().getLocation().toURI()))) {
+		File file = new File(BootProxy.class.getProtectionDomain().getCodeSource().getLocation().toURI());
+		try (JarFile jar = new JarFile(file)) {
+			// Find boot class
 			main = jar.getManifest().getMainAttributes().getValue("Boot-Class");
+
+			// Load jar entries
+			jar.stream().map(entry -> entry.getName()).filter(name -> name.endsWith(".jar")).forEach(name -> {
+				try {
+					System.out.println("Adding: " + new URL(String.format("file:%s!/%s", file.getAbsolutePath(), name)));
+					loader.add(new URL(String.format("file:%s!/%s", file.getAbsolutePath(), name)), false);
+				} catch (IOException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				}
+			});
 		} catch (Exception e) {
 			throw new RuntimeException("Failed to read manifest", e);
 		}
 
 		if (main == null)
 			throw new RuntimeException("Missing Boot-Class attribute");
-
-		CompactClassLoader loader = new CompactClassLoader(true);
-		Thread.currentThread().setContextClassLoader(loader);
 
 		log.fine("Booting application: " + main);
 		loader.loadClass(main).getMethod("main", new Class[] { String[].class }).invoke(null, new Object[] { args });
