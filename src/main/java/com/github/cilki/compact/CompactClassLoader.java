@@ -24,9 +24,6 @@ import java.util.Enumeration;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Objects;
-import java.util.logging.ConsoleHandler;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -35,64 +32,40 @@ import java.util.stream.Stream;
  * applications.
  * 
  * <p>
- * This classloader uses the parent-first delegation model.
+ * This classloader uses a parent-first delegation model.
  * 
  * @author cilki
  */
 public final class CompactClassLoader extends ClassLoader {
 
-	static {
-		if (System.getProperty("java.util.logging.SimpleFormatter.format") == null)
-			System.setProperty("java.util.logging.SimpleFormatter.format", "[%1$tF %1$tT] [%4$-4s] %5$s %n");
-	}
-
-	public static final Logger log = Logger.getLogger(CompactClassLoader.class.getName());
+	public static final boolean LOG_INFO = Boolean.getBoolean("ccl.info");
+	public static final boolean LOG_FINE = Boolean.getBoolean("ccl.fine");
 
 	static {
-		log.setLevel(Level.parse(System.getProperty("ccl.level", "warning").toUpperCase()));
-		var handler = new ConsoleHandler();
-		handler.setLevel(Level.FINE);
-		log.addHandler(handler);
-
 		registerAsParallelCapable();
 	}
 
-	private static CompactClassLoader system;
-
-	public static CompactClassLoader getSystem() {
-		return system;
-	}
-
 	/**
-	 * A list of classloaders responsible for loading {@link URL}s introduced by
-	 * {@link #add(URL)}.
+	 * A list of {@link NodeClassLoader} or {@link CompactClassLoader} child
+	 * classloaders.
 	 */
 	protected final List<ClassLoader> components;
 
 	/**
 	 * Build an empty {@link CompactClassLoader}.
 	 * 
-	 * @param parent The parent {@link ClassLoader} which may be {@code null}
+	 * @param parent The parent {@link ClassLoader} (which may be {@code null})
 	 */
 	public CompactClassLoader(ClassLoader parent) {
 		super(parent);
 		components = new LinkedList<>();
-
-		// Examine the stack to determine whether this classloader is being built by the
-		// runtime
-		var stack = Thread.currentThread().getStackTrace();
-		if (stack[stack.length - 1].getMethodName().equals("initPhase3")) {
-			if (system != null)
-				throw new RuntimeException();
-			system = this;
-		}
 	}
 
 	/**
-	 * Add the given {@link URL} to the {@link ClassLoader} as a new component.
+	 * Add the given {@link URL} and any nested {@link URL}s to the
+	 * {@link ClassLoader} as new components.
 	 * 
-	 * @param url The {@link URL} to add which may be a jar file or a jar file
-	 *            within a jar file
+	 * @param url The optionally nested {@link URL}
 	 * @throws IOException If an I/O exception occurs while reading the given URL
 	 */
 	public void add(URL url) throws IOException {
@@ -102,8 +75,7 @@ public final class CompactClassLoader extends ClassLoader {
 	/**
 	 * Add the given {@link URL} to the {@link ClassLoader} as a new component.
 	 * 
-	 * @param url       The {@link URL} to add which may be a jar file or a jar file
-	 *                  within a jar file
+	 * @param url       The optionally nested {@link URL}
 	 * @param recursive Whether all encountered jars will also be added
 	 * @throws IOException If an I/O exception occurs while reading the given URL
 	 */
@@ -113,15 +85,31 @@ public final class CompactClassLoader extends ClassLoader {
 				.anyMatch(c -> c.findBaseUrl(url)))
 			throw new IllegalArgumentException("The URL already has a classloader in the hierarchy");
 
+		logInfo("Adding child URL");
 		components.add(new NodeClassLoader(this, URLFactory.toNested(url), recursive));
 	}
 
+	/**
+	 * Add another compact classloader as a child to this classloader.
+	 * 
+	 * @param cl The classloader to add
+	 */
 	public void add(CompactClassLoader cl) {
 		Objects.requireNonNull(cl);
 		if (components.contains(cl))
 			throw new IllegalArgumentException("The classloader already exists in the hierarchy");
 
+		logInfo("Adding child classloader");
 		components.add(cl);
+	}
+
+	/**
+	 * Remove the given classloader.
+	 * 
+	 * @param cl The classloader to remove
+	 */
+	public void remove(CompactClassLoader cl) {
+		components.remove(cl);
 	}
 
 	@Override
@@ -130,17 +118,15 @@ public final class CompactClassLoader extends ClassLoader {
 	}
 
 	Class<?> loadClass(String name, ClassLoader skip) throws ClassNotFoundException {
-		log.finer(() -> "Loading class: " + name);
+		logFine("Loading class: %s", name);
 
-		// Delegate to parent first
 		try {
-			return super.loadClass(name, false);
+			// Delegate to parent first
+			return super.loadClass(name, true);
 		} catch (ClassNotFoundException e) {
-			// continue
+			// Try components last
+			return loadDown(name, skip);
 		}
-
-		// Try components
-		return loadDown(name, skip);
 	}
 
 	Class<?> loadDown(String name, ClassLoader skip) throws ClassNotFoundException {
@@ -179,7 +165,7 @@ public final class CompactClassLoader extends ClassLoader {
 	}
 
 	Stream<URL> resources(String name, ClassLoader skip) {
-		log.finer(() -> "Loading resources: " + name);
+		logFine("Loading resources: ", name);
 
 		if (getParent() != null)
 			return Stream.concat(getParent().resources(name), resourcesDown(name, skip));
@@ -208,4 +194,13 @@ public final class CompactClassLoader extends ClassLoader {
 		return findResources(name);
 	}
 
+	private void logInfo(String format, Object... args) {
+		if (LOG_INFO)
+			System.out.println(String.format("[CCL][INFO] " + format, args));
+	}
+
+	private void logFine(String format, Object... args) {
+		if (LOG_FINE)
+			System.out.println(String.format("[CCL][FINE] " + format, args));
+	}
 }

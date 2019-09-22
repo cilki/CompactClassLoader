@@ -17,7 +17,8 @@
  *****************************************************************************/
 package com.github.cilki.compact;
 
-import static com.github.cilki.compact.CompactClassLoader.log;
+import static com.github.cilki.compact.CompactClassLoader.LOG_FINE;
+import static com.github.cilki.compact.CompactClassLoader.LOG_INFO;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -133,7 +134,7 @@ final class NodeClassLoader extends ClassLoader {
 	 * @throws IOException If an I/O exception occurs while reading the given URL
 	 */
 	private void init(URL url, ZipInputStream jar, boolean recursive) throws IOException {
-		log.fine(() -> "Initializing node: " + url);
+		logInfo("Initializing node: %s", url);
 
 		int position = 0;
 		ZipEntry entry;
@@ -174,7 +175,7 @@ final class NodeClassLoader extends ClassLoader {
 	}
 
 	Class<?> loadClass(String name, ClassLoader skip) throws ClassNotFoundException {
-		log.finer(() -> "[NODE: " + base + "] Loading class: " + name);
+		logFine("[NODE: %s] Loading class: %s", base, name);
 
 		// Shortcut for standard classes
 		if (name.startsWith("java."))
@@ -280,7 +281,7 @@ final class NodeClassLoader extends ClassLoader {
 	}
 
 	Stream<URL> resources(String name, ClassLoader skip) {
-		log.finer(() -> "[NODE: " + base + "] Loading resources: " + name);
+		logFine("[NODE: %s] Loading resources for: %s", base, name);
 
 		// Delegate down hierarchy first
 		Stream<URL> r = resourcesDown(name, skip);
@@ -316,5 +317,15 @@ final class NodeClassLoader extends ClassLoader {
 	@Override
 	public Enumeration<URL> getResources(String name) throws IOException {
 		return Collections.enumeration(resources(name).collect(Collectors.toList()));
+	}
+
+	private void logInfo(String format, Object... args) {
+		if (LOG_INFO)
+			System.out.println(String.format("[NCL][INFO] " + format, args));
+	}
+
+	private void logFine(String format, Object... args) {
+		if (LOG_FINE)
+			System.out.println(String.format("[NCL][FINE] " + format, args));
 	}
 }
