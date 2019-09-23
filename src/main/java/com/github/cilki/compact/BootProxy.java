@@ -17,37 +17,54 @@
  *****************************************************************************/
 package com.github.cilki.compact;
 
-import static com.github.cilki.compact.CompactClassLoader.log;
-
 import java.io.File;
+import java.net.URL;
 import java.util.jar.JarFile;
 
 /**
- * This class loads the application's main class with a new recursive
- * {@link CompactClassLoader} and invokes its main method. To use it, copy the
- * existing {@code Main-Class} attribute to {@code Boot-Class} and set
- * {@code Main-Class} to "com.github.cilki.compact.BootProxy".
+ * This class loads the application's main class with a new
+ * {@link CompactClassLoader} and invokes its main method. The default thread
+ * context loader will be replaced with the new classloader.
+ * 
+ * <p>
+ * To use this class, copy the existing {@code Main-Class} manifest attribute to
+ * {@code Boot-Class} and set {@code Main-Class} to
+ * "com.github.cilki.compact.BootProxy". Set {@code Compact-Class-Path} to the
+ * nested class path archives.
  * 
  * @author cilki
  */
 public final class BootProxy {
 
 	public static void main(String[] args) throws Exception {
+		CompactClassLoader loader = new CompactClassLoader(ClassLoader.getSystemClassLoader());
+
 		String main = null;
-		try (JarFile jar = new JarFile(
-				new File(BootProxy.class.getProtectionDomain().getCodeSource().getLocation().toURI()))) {
-			main = jar.getManifest().getMainAttributes().getValue("Boot-Class");
+		File file = new File(BootProxy.class.getProtectionDomain().getCodeSource().getLocation().toURI());
+		try (JarFile jar = new JarFile(file)) {
+			var manifest = jar.getManifest().getMainAttributes();
+
+			// Find boot class
+			main = manifest.getValue("Boot-Class");
+			if (main == null)
+				throw new RuntimeException("Missing Boot-Class attribute");
+
+			// Add root jar
+			loader.add(file.toURI().toURL(), false);
+
+			// Add classpath entries
+			var classPath = manifest.getValue("Compact-Class-Path");
+			if (classPath != null) {
+				for (var entry : classPath.split(" ")) {
+					loader.add(new URL(String.format("%s!/%s", file.toURI().toURL(), entry)), false);
+				}
+			}
 		} catch (Exception e) {
 			throw new RuntimeException("Failed to read manifest", e);
 		}
 
-		if (main == null)
-			throw new RuntimeException("Missing Boot-Class attribute");
-
-		CompactClassLoader loader = new CompactClassLoader(true);
 		Thread.currentThread().setContextClassLoader(loader);
-
-		log.fine("Booting application: " + main);
-		loader.loadClass(main).getMethod("main", new Class[] { String[].class }).invoke(null, new Object[] { args });
+		loader.loadDown(main, null).getMethod("main", new Class[] { String[].class }).invoke(null,
+				new Object[] { args });
 	}
 }

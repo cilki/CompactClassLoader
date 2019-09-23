@@ -54,7 +54,7 @@ class BootProxyTest {
 			// Write manifest
 			Files.createDirectories(zip.getPath("META-INF"));
 			Files.writeString(zip.getPath("META-INF/MANIFEST.MF"),
-					"Manifest-Version: 1.0\nMain-Class: com.github.cilki.compact.BootProxy\nBoot-Class: testapp.Main\n\n");
+					"Manifest-Version: 1.0\nMain-Class: com.github.cilki.compact.BootProxy\nBoot-Class: testapp.Main\nCompact-Class-Path: lib1.jar lib2.jar\n\n");
 
 			// Copy test application
 			try (FileSystem app = FileSystems.newFileSystem(

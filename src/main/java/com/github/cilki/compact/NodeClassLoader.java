@@ -17,7 +17,8 @@
  *****************************************************************************/
 package com.github.cilki.compact;
 
-import static com.github.cilki.compact.CompactClassLoader.log;
+import static com.github.cilki.compact.CompactClassLoader.LOG_FINE;
+import static com.github.cilki.compact.CompactClassLoader.LOG_INFO;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -40,7 +41,13 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
 /**
- * A recursive {@link ClassLoader} for some jar file that could be nested.
+ * A recursive {@link ClassLoader} that corresponds to exactly one (optionally
+ * nested) jar file.
+ * 
+ * <p>
+ * If {@link #getParent()} returns a {@link CompactClassLoader}, then this
+ * classloader is a "root" node. Otherwise if {@link #getParent()} returns
+ * another {@link NodeClassLoader}, then this classloader is a "child" node.
  * 
  * @author cilki
  */
@@ -73,17 +80,14 @@ final class NodeClassLoader extends ClassLoader {
 	/**
 	 * Build a new root {@link NodeClassLoader}.
 	 * 
-	 * @param parent    The parent {@link ClassLoader}
+	 * @param parent    The parent {@link CompactClassLoader}
 	 * @param url       The {@link URL} to the {@link ClassLoader}'s jar
 	 * @param recursive Whether all encountered jars will become children of this
 	 *                  {@link ClassLoader}
 	 * @throws IOException If an I/O exception occurs while reading the given URL
 	 */
-	public NodeClassLoader(ClassLoader parent, URL url, boolean recursive) throws IOException {
-		super(parent);
-
-		if (parent instanceof CompactClassLoader)
-			throw new IllegalArgumentException("Invalid parent classloader");
+	public NodeClassLoader(CompactClassLoader parent, URL url, boolean recursive) throws IOException {
+		super(Objects.requireNonNull(parent));
 
 		this.base = Objects.requireNonNull(url);
 		this.protectionDomain = new ProtectionDomain(new CodeSource(base, (Certificate[]) null), null, this, null);
@@ -130,7 +134,7 @@ final class NodeClassLoader extends ClassLoader {
 	 * @throws IOException If an I/O exception occurs while reading the given URL
 	 */
 	private void init(URL url, ZipInputStream jar, boolean recursive) throws IOException {
-		log.fine(() -> "Initializing node: " + url);
+		logInfo("Initializing URL node: %s", url);
 
 		int position = 0;
 		ZipEntry entry;
@@ -167,29 +171,19 @@ final class NodeClassLoader extends ClassLoader {
 
 	@Override
 	protected Class<?> loadClass(String name, boolean resolve) throws ClassNotFoundException {
-		// Shortcut for standard classes
-		if (name.startsWith("java."))
-			return getSystemClassLoader().loadClass(name);
-
 		return loadClass(name, null);
 	}
 
-	/**
-	 * Load a class by first searching down the classloader hierarchy and then
-	 * delegating to the parent classloader (up the hierarchy).
-	 * 
-	 * @param name   The binary name of the class
-	 * @param caller The {@link NodeClassLoader} that delegated loading to
-	 *               {@code this} (required to avoid infinite loop)
-	 * @return The resulting {@code Class} object
-	 * @throws ClassNotFoundException If the class was not found
-	 */
-	private Class<?> loadClass(String name, NodeClassLoader caller) throws ClassNotFoundException {
-		log.finer(() -> "[NODE: " + base + "] Loading class: " + name);
+	Class<?> loadClass(String name, ClassLoader skip) throws ClassNotFoundException {
+		// Shortcut for standard library classes
+		if (name.startsWith("java."))
+			return getPlatformClassLoader().loadClass(name);
+
+		logFine("Load class request: %s", base, name);
 
 		// Delegate down hierarchy
 		try {
-			return loadDown(name, caller);
+			return loadDown(name, skip);
 		} catch (ClassNotFoundException e) {
 			// Rethrow if not empty
 			if (e.getCause() != null)
@@ -199,9 +193,10 @@ final class NodeClassLoader extends ClassLoader {
 		// Delegate up hierarchy
 		if (getParent() instanceof NodeClassLoader)
 			return ((NodeClassLoader) getParent()).loadClass(name, this);
-		if (getParent() != null)
-			return getParent().loadClass(name);
-		throw new ClassNotFoundException(name);
+		if (getParent() instanceof CompactClassLoader)
+			return ((CompactClassLoader) getParent()).loadClass(name, this);
+
+		throw new RuntimeException("Invalid parent classloader: " + getParent());
 	}
 
 	/**
@@ -213,7 +208,7 @@ final class NodeClassLoader extends ClassLoader {
 	 * @return The resulting {@code Class} object
 	 * @throws ClassNotFoundException If the class was not found
 	 */
-	private Class<?> loadDown(String name, NodeClassLoader skip) throws ClassNotFoundException {
+	Class<?> loadDown(String name, ClassLoader skip) throws ClassNotFoundException {
 		synchronized (getClassLoadingLock(name)) {
 			Class<?> c = findLoadedClass(name);
 			if (c != null)
@@ -277,6 +272,7 @@ final class NodeClassLoader extends ClassLoader {
 
 	@Override
 	protected Enumeration<URL> findResources(String name) throws IOException {
+		// Calling this method is an error
 		throw new UnsupportedOperationException();
 	}
 
@@ -285,17 +281,17 @@ final class NodeClassLoader extends ClassLoader {
 		return resources(name, null);
 	}
 
-	private Stream<URL> resources(String name, NodeClassLoader caller) {
-		log.finer(() -> "[NODE: " + base + "] Loading resources: " + name);
+	Stream<URL> resources(String name, ClassLoader skip) {
+		logFine("Load resource request: %s", name);
 
 		// Delegate down hierarchy first
-		Stream<URL> r = resourcesDown(name, caller);
+		Stream<URL> r = resourcesDown(name, skip);
 
 		// Delegate up hierarchy next
 		if (getParent() instanceof NodeClassLoader)
 			return Stream.concat(r, ((NodeClassLoader) getParent()).resources(name, this));
-		if (getParent() != null)
-			return Stream.concat(r, getParent().resources(name));
+		if (getParent() instanceof CompactClassLoader)
+			return Stream.concat(r, ((CompactClassLoader) getParent()).resources(name, this));
 		return r;
 	}
 
@@ -306,7 +302,7 @@ final class NodeClassLoader extends ClassLoader {
 	 * @param skip A child classloader that must be skipped
 	 * @return The resulting resource stream
 	 */
-	private Stream<URL> resourcesDown(String name, NodeClassLoader skip) {
+	Stream<URL> resourcesDown(String name, ClassLoader skip) {
 		Stream<URL> descendents = children.stream().filter(c -> c != skip).flatMap(c -> c.resourcesDown(name, null));
 		URL resource = findResource(name);
 		if (resource != null)
@@ -322,5 +318,15 @@ final class NodeClassLoader extends ClassLoader {
 	@Override
 	public Enumeration<URL> getResources(String name) throws IOException {
 		return Collections.enumeration(resources(name).collect(Collectors.toList()));
+	}
+
+	private void logInfo(String format, Object... args) {
+		if (LOG_INFO)
+			System.out.println(String.format("[NCL][INFO] " + format, args));
+	}
+
+	private void logFine(String format, Object... args) {
+		if (LOG_FINE)
+			System.out.println(String.format("[NCL][FINE] " + format, args));
 	}
 }

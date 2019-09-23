@@ -24,45 +24,37 @@ import java.util.Enumeration;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Objects;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
  * A {@link ClassLoader} that can load nested jar files and bootstrap
- * applications.<br>
- * <br>
- * Note: Although this class is not entirely thread safe, it can safely load
- * classes in parallel.
+ * applications.
+ * 
+ * <p>
+ * This classloader uses a parent-first delegation model.
  * 
  * @author cilki
  */
 public final class CompactClassLoader extends ClassLoader {
 
-	static {
-		if (System.getProperty("java.util.logging.SimpleFormatter.format") == null)
-			System.setProperty("java.util.logging.SimpleFormatter.format", "[%1$tF %1$tT] [%4$-4s] %5$s %n");
-	}
-
-	public static final Logger log = Logger.getLogger(CompactClassLoader.class.getName());
+	public static final boolean LOG_INFO = Boolean.getBoolean("ccl.log.info");
+	public static final boolean LOG_FINE = Boolean.getBoolean("ccl.log.fine");
 
 	static {
-		log.setLevel(Level.parse(System.getProperty("ccl.level", "warning").toUpperCase()));
-
 		registerAsParallelCapable();
 	}
 
 	/**
-	 * A list of classloaders responsible for loading {@link URL}s introduced by
-	 * {@link #add(URL)}.
+	 * A list of {@link NodeClassLoader} or {@link CompactClassLoader} child
+	 * classloaders.
 	 */
-	private final List<NodeClassLoader> components;
+	protected final List<ClassLoader> components;
 
 	/**
 	 * Build an empty {@link CompactClassLoader}.
 	 * 
-	 * @param parent The parent {@link ClassLoader} which may be {@code null}
+	 * @param parent The parent {@link ClassLoader} (which may be {@code null})
 	 */
 	public CompactClassLoader(ClassLoader parent) {
 		super(parent);
@@ -70,22 +62,10 @@ public final class CompactClassLoader extends ClassLoader {
 	}
 
 	/**
-	 * Build a {@link CompactClassLoader} for the current jar file.
+	 * Add the given {@link URL} and any nested {@link URL}s to the
+	 * {@link ClassLoader} as new components.
 	 * 
-	 * @param recursive Whether all encountered jars will also be added
-	 * @throws IOException If an I/O exception occurs while reading the current jar
-	 */
-	public CompactClassLoader(boolean recursive) throws IOException {
-		this(ClassLoader.getSystemClassLoader());
-
-		add(getClass().getProtectionDomain().getCodeSource().getLocation(), recursive);
-	}
-
-	/**
-	 * Add the given {@link URL} to the {@link ClassLoader} as a new component.
-	 * 
-	 * @param url The {@link URL} to add which may be a jar file or a jar file
-	 *            within a jar file
+	 * @param url The optionally nested {@link URL}
 	 * @throws IOException If an I/O exception occurs while reading the given URL
 	 */
 	public void add(URL url) throws IOException {
@@ -95,64 +75,132 @@ public final class CompactClassLoader extends ClassLoader {
 	/**
 	 * Add the given {@link URL} to the {@link ClassLoader} as a new component.
 	 * 
-	 * @param url       The {@link URL} to add which may be a jar file or a jar file
-	 *                  within a jar file
+	 * @param url       The optionally nested {@link URL}
 	 * @param recursive Whether all encountered jars will also be added
 	 * @throws IOException If an I/O exception occurs while reading the given URL
 	 */
 	public void add(URL url, boolean recursive) throws IOException {
 		Objects.requireNonNull(url);
-		if (components.stream().anyMatch(c -> c.findBaseUrl(url)))
-			throw new IllegalArgumentException("The URL is already has a classloader in the hierarchy");
+		if (components.stream().filter(NodeClassLoader.class::isInstance).map(NodeClassLoader.class::cast)
+				.anyMatch(c -> c.findBaseUrl(url)))
+			throw new IllegalArgumentException("The URL already has a classloader in the hierarchy");
 
-		components.add(new NodeClassLoader(getParent(), URLFactory.toNested(url), recursive));
+		components.add(new NodeClassLoader(this, URLFactory.toNested(url), recursive));
+	}
+
+	/**
+	 * Add another compact classloader as a child to this classloader.
+	 * 
+	 * @param cl The classloader to add
+	 */
+	public void add(CompactClassLoader cl) {
+		Objects.requireNonNull(cl);
+		if (components.contains(cl))
+			throw new IllegalArgumentException("The classloader already exists in the hierarchy");
+
+		logInfo("Adding child classloader: %s", cl);
+		components.add(cl);
+	}
+
+	/**
+	 * Remove the given classloader.
+	 * 
+	 * @param cl The classloader to remove
+	 */
+	public void remove(CompactClassLoader cl) {
+		components.remove(cl);
 	}
 
 	@Override
 	protected Class<?> loadClass(String name, boolean resolve) throws ClassNotFoundException {
+		return loadClass(name, null);
+	}
 
-		// Shortcut for standard classes
-		if (name.startsWith("java."))
-			return getSystemClassLoader().loadClass(name);
+	Class<?> loadClass(String name, ClassLoader skip) throws ClassNotFoundException {
+		logFine("Load class request: %s", name);
 
-		// Try components
-		for (NodeClassLoader component : components) {
-			try {
-				return component.loadClass(name);
-			} catch (ClassNotFoundException e) {
-				// Rethrow if not empty
-				if (e.getCause() != null)
-					throw e;
+		try {
+			// Delegate to parent first
+			return super.loadClass(name, true);
+		} catch (ClassNotFoundException e) {
+			// Try components last
+			return loadDown(name, skip);
+		}
+	}
+
+	Class<?> loadDown(String name, ClassLoader skip) throws ClassNotFoundException {
+		for (ClassLoader component : components) {
+			if (component != skip) {
+				try {
+					if (component instanceof NodeClassLoader)
+						return ((NodeClassLoader) component).loadDown(name, null);
+					if (component instanceof CompactClassLoader)
+						return ((CompactClassLoader) component).loadDown(name, null);
+				} catch (ClassNotFoundException e) {
+					// Rethrow if not empty
+					if (e.getCause() != null)
+						throw e;
+				}
 			}
 		}
 
-		// Delegate to parent
-		return super.loadClass(name, resolve);
+		throw new ClassNotFoundException();
 	}
 
 	@Override
 	protected URL findResource(String name) {
-		return components.stream().flatMap(component -> component.resources(name)).findFirst().orElse(null);
+		// Calling this method is an error
+		throw new UnsupportedOperationException();
 	}
 
 	@Override
-	protected Enumeration<URL> findResources(String name) {
-		return Collections.enumeration(
-				components.stream().flatMap(component -> component.resources(name)).collect(Collectors.toList()));
+	protected Enumeration<URL> findResources(String name) throws IOException {
+		// Calling this method is an error
+		throw new UnsupportedOperationException();
 	}
 
 	@Override
 	public Stream<URL> resources(String name) {
-		return components.stream().flatMap(component -> component.resources(name));
+		return resources(name, null);
+	}
+
+	Stream<URL> resources(String name, ClassLoader skip) {
+		logFine("Load resource request: %s", name);
+
+		if (getParent() != null)
+			return Stream.concat(getParent().resources(name), resourcesDown(name, skip));
+		else
+			return resourcesDown(name, skip);
+	}
+
+	Stream<URL> resourcesDown(String name, ClassLoader skip) {
+		return components.stream().filter(component -> component != skip).flatMap(component -> {
+			if (component instanceof NodeClassLoader)
+				return ((NodeClassLoader) component).resourcesDown(name, null);
+			if (component instanceof CompactClassLoader)
+				return ((CompactClassLoader) component).resourcesDown(name, null);
+
+			throw new RuntimeException();
+		});
 	}
 
 	@Override
 	public URL getResource(String name) {
-		return findResource(name);
+		return resources(name).findFirst().orElse(null);
 	}
 
 	@Override
 	public Enumeration<URL> getResources(String name) throws IOException {
-		return findResources(name);
+		return Collections.enumeration(resources(name).collect(Collectors.toList()));
+	}
+
+	private void logInfo(String format, Object... args) {
+		if (LOG_INFO)
+			System.out.println(String.format("[CCL][INFO] " + format, args));
+	}
+
+	private void logFine(String format, Object... args) {
+		if (LOG_FINE)
+			System.out.println(String.format("[CCL][FINE] " + format, args));
 	}
 }
