@@ -179,7 +179,7 @@ final class NodeClassLoader extends ClassLoader {
 		if (name.startsWith("java."))
 			return getPlatformClassLoader().loadClass(name);
 
-		logFine("Load class request: %s", base, name);
+		logFine("Class request: %s", name);
 
 		// Delegate down hierarchy
 		try {
@@ -282,7 +282,7 @@ final class NodeClassLoader extends ClassLoader {
 	}
 
 	Stream<URL> resources(String name, ClassLoader skip) {
-		logFine("Load resource request: %s", name);
+		logFine("Resource request: %s", name);
 
 		// Delegate down hierarchy first
 		Stream<URL> r = resourcesDown(name, skip);

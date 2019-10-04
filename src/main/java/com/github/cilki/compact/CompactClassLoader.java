@@ -117,7 +117,7 @@ public final class CompactClassLoader extends ClassLoader {
 	}
 
 	Class<?> loadClass(String name, ClassLoader skip) throws ClassNotFoundException {
-		logFine("Load class request: %s", name);
+		logFine("Class request: %s", name);
 
 		try {
 			// Delegate to parent first
@@ -165,7 +165,7 @@ public final class CompactClassLoader extends ClassLoader {
 	}
 
 	Stream<URL> resources(String name, ClassLoader skip) {
-		logFine("Load resource request: %s", name);
+		logFine("Resource request: %s", name);
 
 		if (getParent() != null)
 			return Stream.concat(getParent().resources(name), resourcesDown(name, skip));

@@ -37,7 +37,15 @@ import java.util.jar.JarFile;
 public final class BootProxy {
 
 	public static void main(String[] args) throws Exception {
-		CompactClassLoader loader = new CompactClassLoader(ClassLoader.getSystemClassLoader());
+		CompactClassLoader loader;
+
+		if (ClassLoader.getSystemClassLoader() instanceof CompactClassLoader) {
+			loader = (CompactClassLoader) ClassLoader.getSystemClassLoader();
+		} else {
+			// Set the parent classloader to platform rather than system to avoid duplicate
+			// classpath entries from the main jar
+			loader = new CompactClassLoader(ClassLoader.getPlatformClassLoader());
+		}
 
 		String main = null;
 		File file = new File(BootProxy.class.getProtectionDomain().getCodeSource().getLocation().toURI());
@@ -63,7 +71,10 @@ public final class BootProxy {
 			throw new RuntimeException("Failed to read manifest", e);
 		}
 
+		// Set the context loader so all future threads receive the new classloader
 		Thread.currentThread().setContextClassLoader(loader);
+
+		// Invoke the application's main method
 		loader.loadDown(main, null).getMethod("main", new Class[] { String[].class }).invoke(null,
 				new Object[] { args });
 	}
